@@ -1,7 +1,7 @@
 '''
 MAD.py
  
-Code for Maximum Absolute Distance (MAD) algorithm for creativity research
+Code for Maximum Associative Distance (MAD) algorithm for creativity research
 @Brendan Baker
 
 Citation: 
@@ -23,7 +23,7 @@ class MAD:
 
     def __init__(self, space_file):
         '''
-        Constructor that initializes semantic space.
+        Constructor that initializes semantic space and stores word embeddings. 
         '''
         self.word_embeddings = {}
         with open(space_file, 'r', encoding='utf-8') as f:
@@ -40,8 +40,8 @@ class MAD:
         Vectorizes the sentence to create a multiplicative model.
         '''
         word_vectors = []
-        words = sentence.split()
-        for word in words:
+        self.words = sentence.split()
+        for word in self.words:
             if word in self.word_embeddings:
                 word_vectors.append(self.word_embeddings[word])
         resp_vectors = np.array(word_vectors)
@@ -82,10 +82,12 @@ class MAD:
         return df
 
 
-
 if __name__ == '__main__':
     
     import pandas as pd
+    import time
+    
+    start = time.time()
     
     glove_file = './MAD/spaces/glove.6B.300d.txt'
     glove_similarity = MAD(glove_file)
@@ -95,4 +97,7 @@ if __name__ == '__main__':
     
     glove_similarity.apply_to_dataframe(df)
     
+    stop = time.time()
+    
     print(df)
+    print(stop-start)
