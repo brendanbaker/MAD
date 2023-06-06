@@ -2,13 +2,19 @@
 MAD.py
  
 Code for Maximum Absolute Distance (MAD) algorithm for creativity research
+@Brendan Baker
+
+Citation: 
+Yu, Y., Beaty, R. E., Forthmann, B., Beeman, M., Cruz, J. H., & Johnson, D. (2023). 
+A MAD method to assess idea novelty: Improving validity of automatic scoring using maximum associative distance (MAD). 
+Psychology of Aesthetics, Creativity, and the Arts. Advance online publication. https://doi.org/10.1037/aca0000573
+
 '''
 
-import numpy as np
-from scipy.spatial.distance import cosine
-import nltk
+import pandas as pd
 from nltk.corpus import stopwords
-
+from scipy.spatial.distance import cosine
+import numpy as np
 
 class MAD:
     '''
@@ -20,7 +26,7 @@ class MAD:
         Constructor that initializes semantic space.
         '''
         self.word_embeddings = {}
-        with open(glove_file, 'r', encoding='utf-8') as f:
+        with open(space_file, 'r', encoding='utf-8') as f:
             for line in f:
                 values = line.split()
                 word = values[0]
@@ -53,24 +59,40 @@ class MAD:
         '''
         Calculates the maximum absolute distance between the word and any word in the sentence.
         '''
+        # Remove stop words from the sentence, vectorize, and get the word vector for the item word
         sentence = self.remove_stop_words(sentence)
         resp_vectors = self.vectorize_response(sentence)
         if word not in self.word_embeddings:
-            raise ValueError(f'Word "{word}" not found in GloVe embeddings.')
+            raise ValueError(f'Item "{word}" not found in embeddings.')
         word_vector = self.word_embeddings[word]
+        
         # Find the maximum cosine similarity between the word and any word in the sentence
         all_values = {sentence.split()[i]: cosine(resp_vectors[i], word_vector) for i in range(len(resp_vectors))}
-        similarity = np.max(list(all_values.values()))
-        return similarity, all_values, sentence
+        max_key = max(all_values, key=all_values.get)
+        max_dist = np.max(list(all_values.values()))
+        return max_dist, max_key
+
+    def apply_to_dataframe(self, df):
+        '''
+        Apply the maximal distance calculation to a DataFrame.
+        '''
+        df[['maximal_distance', 'word_with_maximal_distance']] = df.apply(
+            lambda row: pd.Series(self.calculate_distance(row['response'], row['item'])), axis=1
+        )
+        return df
+
 
 
 if __name__ == '__main__':
     
+    import pandas as pd
+    
     glove_file = './MAD/spaces/glove.6B.300d.txt'
     glove_similarity = MAD(glove_file)
 
-    sentence = 'will be sure to eat a banana and some apples'
-    word = 'programming'
-
-    similarity_score = glove_similarity.calculate_distance(sentence, word)
-    print(f"Distance between '{sentence}' and '{word}': {similarity_score}")
+    example = {"item": ["apple", "apple","apple"], "response": ["eat apples sdfsd", "build a sculpture", "throw at a wall"]}
+    df = pd.DataFrame(example)
+    
+    glove_similarity.apply_to_dataframe(df)
+    
+    print(df)
