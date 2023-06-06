@@ -1,2 +1,2 @@
 # MAD
-Maximum Absolute Distance (MAD) algorithm for creativity research
+Python implementation of Maximum Associative Distance (MAD) algorithm for creativity research.
