@@ -1,103 +1,106 @@
-'''
-MAD.py
- 
-Code for Maximum Associative Distance (MAD) algorithm for creativity research
-@Brendan Baker
-
-Citation: 
-Yu, Y., Beaty, R. E., Forthmann, B., Beeman, M., Cruz, J. H., & Johnson, D. (2023). 
-A MAD method to assess idea novelty: Improving validity of automatic scoring using maximum associative distance (MAD). 
-Psychology of Aesthetics, Creativity, and the Arts. Advance online publication. https://doi.org/10.1037/aca0000573
-
-'''
-
 import pandas as pd
+import re
 from nltk.corpus import stopwords
-from scipy.spatial.distance import cosine
+from nltk.tokenize import word_tokenize
+from scipy.spatial.distance import cosine as scipy_cosine
 import numpy as np
+from datetime import datetime
 
-class MAD:
+def preprocess_text(text):
+    
+    # Lowercase and punctuation
+    text = text.lower()
+    text = re.sub(r'\W', ' ', text)
+    text = re.sub(r'\s+[a-zA-Z]\s+', ' ', text)
+    text = re.sub(r'\^[a-zA-Z]\s+', ' ', text)
+    text = re.sub(r'\s+', ' ', text, flags=re.I)
+
+    # Stop words
+    stop_words = set(stopwords.words('english'))
+    word_tokens = word_tokenize(text)
+    text = ' '.join([word for word in word_tokens if word.casefold() not in stop_words])
+    
+    # Remove single characters
+    text = ' '.join([word for word in text.split() if len(word) > 1])
+    
+    return text
+
+
+def MAD(data_path, space_path, write = True):
     '''
-    Class for loading word vectors and calculating MAD scores.
+    Calculates Maximal Associative Distance (MAD) scores for each response.
     '''
+    
+    data = pd.read_csv(data_path)
+    space = pd.read_csv(space_path)
+    
 
-    def __init__(self, space_file):
-        '''
-        Constructor that initializes semantic space and stores word embeddings. 
-        '''
-        self.word_embeddings = {}
-        with open(space_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                values = line.split()
-                word = values[0]
-                embedding = np.asarray(values[1:], dtype='float32')
-                self.word_embeddings[word] = embedding
+    # Add a unique identifier for each response
+    data['unique'] = range(1, len(data) + 1)
 
-        self.stop_words = set(stopwords.words('english'))
+    # Save original 
+    original = data.copy()
+    
+    # Find the item vector: separate the item column from the data then append the space that matches the item in the word column 
+    item = data['item'].drop_duplicates()
+    item = item.to_frame()
+    item = item.merge(space, left_on='item', right_on='word', how='left')
+    item = item.drop(columns=['word'])
+    item = item.rename(columns={'vector': 'item_vector'})
+    
+    # Run text preprocessing on the responses
+    data['response'] = data['response'].apply(lambda x: preprocess_text(x))
+    
+    # Now tokenize the response column, pivot the data, and merge the space that matches the word in the response column
+    data['response'] = data['response'].apply(lambda x: word_tokenize(x))
+    data = data.explode('response')
+    data = data.merge(space, left_on='response', right_on='word', how='left')
+    data = data.drop(columns=['word'])
+    data = data.rename(columns={'vector': 'response_vector'})
+    
+    # Loop through every row in the dataframe
+    distance_list = []
 
-    def vectorize_response(self, sentence):
-        '''
-        Vectorizes the sentence to create a multiplicative model.
-        '''
-        word_vectors = []
-        self.words = sentence.split()
-        for word in self.words:
-            if word in self.word_embeddings:
-                word_vectors.append(self.word_embeddings[word])
-        resp_vectors = np.array(word_vectors)
-        return resp_vectors
-
-    def remove_stop_words(self, sentence):
-        '''
-        Removes stop words from the text
-        '''
-        words = sentence.split()
-        words = [word for word in words if word.lower() not in self.stop_words]
-        return ' '.join(words)
-
-    def calculate_distance(self, sentence, word):
-        '''
-        Calculates the maximum absolute distance between the word and any word in the sentence.
-        '''
-        # Remove stop words from the sentence, vectorize, and get the word vector for the item word
-        sentence = self.remove_stop_words(sentence)
-        resp_vectors = self.vectorize_response(sentence)
-        if word not in self.word_embeddings:
-            raise ValueError(f'Item "{word}" not found in embeddings.')
-        word_vector = self.word_embeddings[word]
+    for i in range(len(data)):
+        # Get the item name
+        item_name = data['item'][i]
         
-        # Find the maximum cosine similarity between the word and any word in the sentence
-        all_values = {sentence.split()[i]: cosine(resp_vectors[i], word_vector) for i in range(len(resp_vectors))}
-        max_key = max(all_values, key=all_values.get)
-        max_dist = np.max(list(all_values.values()))
-        return max_dist, max_key
+        # Find the item vector
+        item_vector = item[item['item'] == item_name]
+        
+        # Take all values in that row that are in a "V" column, store as np array
+        item_vector = np.array(item_vector.iloc[0, 1:])
+        
+        # Get the response vector - which is the last 300 columns in the row
+        response_vector = np.array(data.iloc[i, -300:])
+        
+        # Get the cosine distance between the item vector and the response vector
+        distance = scipy_cosine(item_vector, response_vector)
+        
+        # Calculate the distance
+        distance = scipy_cosine(item_vector, response_vector)
+        
+        # Add the distance to the dataframe
+        distance_list.append(distance)
+    
+    # Append the distance list 
+    data['distance'] = distance_list
 
-    def apply_to_dataframe(self, df):
-        '''
-        Apply the maximal distance calculation to a DataFrame.
-        '''
-        df[['maximal_distance', 'word_with_maximal_distance']] = df.apply(
-            lambda row: pd.Series(self.calculate_distance(row['response'], row['item'])), axis=1
-        )
-        return df
-
-
+    # Select the maximum distance from each unique identifier
+    data = data.groupby('unique').max()
+    
+    # Select distance and unique, then merge with original dataframe
+    data = data[['distance']]
+    data = data.merge(original, on='unique', how='left')
+    
+    # Write the data to a csv
+    if write:
+        data.to_csv("MAD_" + str(datetime.now()) + ".csv", index=False)
+        
+    return data
+        
+        
 if __name__ == '__main__':
-    
-    import pandas as pd
-    import time
-    
-    start = time.time()
-    
-    glove_file = './MAD/spaces/glove.6B.300d.txt'
-    glove_similarity = MAD(glove_file)
-
-    example = {"item": ["apple", "apple","apple"], "response": ["eat apples sdfsd", "build a sculpture", "throw at a wall"]}
-    df = pd.DataFrame(example)
-    
-    glove_similarity.apply_to_dataframe(df)
-    
-    stop = time.time()
-    
-    print(df)
-    print(stop-start)
+    res = MAD(data_path="./data/test_data.csv", space_path="./spaces/glove.csv")
+    print(res.head())
+    print(res.corr())
