@@ -143,8 +143,6 @@ def all_mad(data_path, space_folder, write = True):
     # Iterate through each space and run MAD
     results = [MAD(data_path=data_path, space_path=space_folder + space, label=space[:-4], write = False) for space in spaces]
     
-    print(results)
-    
     # Merge all data frames in the list together
     for i in range(len(results)):
         if i == 0:
@@ -166,6 +164,3 @@ def all_mad(data_path, space_folder, write = True):
 if __name__ == '__main__':
     results = all_mad(data_path = "./data/test_data.csv", space_folder = "./spaces/")
     print(results)
-    # print(results)
-    # results = MAD(data_path = "./data/test_data.csv", space_path = "./spaces/glove.csv", label = "word2vec", write = False)
-    # print(results)
