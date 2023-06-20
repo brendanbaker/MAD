@@ -1,8 +1,3 @@
-# Make sure blanks/no max doesn't crash
-# Add mean
-# Default function to do all 5
-# Do some speed testing
-
 import pandas as pd
 import re
 from nltk.corpus import stopwords
@@ -17,33 +12,29 @@ def MAD(data_path, space_folder, write = True):
     Completes all MAD calculations for all spaces.
     '''
 
+    # Load stop words
+    stop_words = set(stopwords.words('english'))
+    
     def preprocess_text(text):
         '''
-        Preprocesses text for MAD calculations.
+        Optimized preprocessing for MAD calculations.
         '''
-        # Lowercase and punctuation
         text = text.lower()
-        text = re.sub(r'\W', ' ', text)
-        text = re.sub(r'\s+[a-zA-Z]\s+', ' ', text)
-        text = re.sub(r'\^[a-zA-Z]\s+', ' ', text)
-        text = re.sub(r'\s+', ' ', text, flags=re.I)
-
-        # Stop words
-        stop_words = set(stopwords.words('english'))
+        text = re.sub(r'\W|\s+[a-zA-Z]\s+|\^[a-zA-Z]\s+|\s+', ' ', text)
         word_tokens = word_tokenize(text)
-        text = ' '.join([word for word in word_tokens if word.casefold() not in stop_words])
-        
-        # Remove single characters
-        text = ' '.join([word for word in text.split() if len(word) > 1])
-        
+
+        # Combine stopwords removal and single character removal
+        text = ' '.join(word for word in word_tokens if word not in stop_words and len(word) > 1)
+
         return text
     
     # List all files in the space folder that end in .csv
     spaces = [file for file in os.listdir(space_folder) if file.endswith(".csv")]
     
     results = []
+    data = pd.read_csv(data_path)
+    
     for space in spaces:
-        data = pd.read_csv(data_path)
         space_df = pd.read_csv(space_folder + space)
 
         # Preprocessing steps
@@ -56,6 +47,7 @@ def MAD(data_path, space_folder, write = True):
         data['response'] = data['response'].apply(lambda x: word_tokenize(x))
         data = data.explode('response')
         data = data.merge(space_df, left_on='response', right_on='word', how='left').drop(columns=['word']).rename(columns={'vector': 'response_vector'})
+        
 
         # Distance calculation
         distance_list = []
@@ -64,7 +56,6 @@ def MAD(data_path, space_folder, write = True):
             item_vector = np.array(item[item['item'] == item_name].iloc[0, 1:]).astype(float)
             response_vector = np.array(data.iloc[i, 4:]).astype(float)
             
-            # Modification starts here
             if np.isnan(response_vector).any():  # If there are any NaN in the response vector
                 distance = np.nan
             else:
@@ -72,7 +63,6 @@ def MAD(data_path, space_folder, write = True):
                     distance = scipy_cosine(item_vector, response_vector)
                 except ValueError:
                     distance = np.nan
-            # Modification ends here
             distance_list.append(distance)
 
         # Final steps
