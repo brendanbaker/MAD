@@ -90,5 +90,9 @@ def MAD(data_path, space_folder, write = True):
     
         
 if __name__ == '__main__':
-    results = MAD(data_path = "./data/test_data.csv", space_folder = "./spaces/")
+    import time
+    start = time.time()
+    results = MAD(data_path = "./data/test_data_long.csv", space_folder = "./spaces/")
+    end = time.time()
+    print("Time elapsed: ", end - start)
     print(results)
