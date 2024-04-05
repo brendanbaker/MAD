@@ -1,4 +1,4 @@
-# MAD
+# MAD - NLP for creativity research
 Python implementation of Maximum Associative Distance (MAD) algorithm - a Natural Language Processing (NLP) method for creativity research.  Pretrained semantic space approach. 
 
 Please cite: 
